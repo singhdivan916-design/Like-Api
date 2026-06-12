@@ -14,8 +14,8 @@ app = FastAPI(default_response_class=PrettyJSONResponse)
 store = {}
 RESET_HOUR_UTC = 4
 
-# Sentinel value: timezone-aware datetime far in the past
-_EPOCH_AWARE = datetime(1970, 1, 1, tzinfo=timezone.utc)
+# Timezone-aware sentinel (far in the past)
+EPOCH_AWARE = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 def _random_likes(level: int) -> int:
     if level < 30:
@@ -40,8 +40,8 @@ async def root():
 @app.get("/like")
 async def like(uid: str = Query(...)):
     reset = _reset_time()
-    # Use the timezone-aware sentinel instead of datetime.min
-    first = store.get(uid, _EPOCH_AWARE) < reset
+    # Use timezone-aware sentinel
+    first = store.get(uid, EPOCH_AWARE) < reset
 
     async with httpx.AsyncClient(timeout=15) as client:
         try:
