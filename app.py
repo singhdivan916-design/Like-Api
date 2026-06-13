@@ -14,15 +14,18 @@ app = FastAPI(default_response_class=PrettyJSONResponse)
 store = {}
 RESET_HOUR_UTC = 4
 
-# Timezone-aware sentinel (far in the past)
 EPOCH_AWARE = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
-def _random_likes(level: int) -> int:
+def _random_likes(level: int, actual_likes: int) -> int:
+    # Generate based on level
     if level < 30:
-        return random.randint(50, 100)
-    if level <= 50:
-        return random.randint(100, 150)
-    return random.randint(100, 220)
+        fake = random.randint(50, 100)
+    elif level <= 50:
+        fake = random.randint(100, 150)
+    else:
+        fake = random.randint(100, 220)
+    # Never subtract more than actual likes (avoid negative)
+    return min(fake, actual_likes)
 
 def _reset_time() -> datetime:
     now = datetime.now(timezone.utc)
@@ -40,7 +43,6 @@ async def root():
 @app.get("/like")
 async def like(uid: str = Query(...)):
     reset = _reset_time()
-    # Use timezone-aware sentinel
     first = store.get(uid, EPOCH_AWARE) < reset
 
     async with httpx.AsyncClient(timeout=15) as client:
@@ -65,8 +67,8 @@ async def like(uid: str = Query(...)):
         return {"status": 0, "message": "Missing level/liked", "UID": uid}
 
     if first:
-        fake = _random_likes(level)
-        store[uid] = datetime.now(timezone.utc)   # store timezone-aware
+        fake = _random_likes(level, actual)   # passes actual likes to cap
+        store[uid] = datetime.now(timezone.utc)
     else:
         fake = 0
 
@@ -74,7 +76,7 @@ async def like(uid: str = Query(...)):
         "Level": level,
         "LikesGivenByAPI": fake,
         "LikesafterCommand": actual,
-        "LikesbeforeCommand": actual - fake,
+        "LikesbeforeCommand": actual - fake,   # guaranteed >= 0
         "PlayerNickname": basic.get("nickname", "Unknown"),
         "Region": basic.get("region", "Unknown"),
         "UID": basic.get("accountId", uid),
